@@ -1,0 +1,23 @@
+# .dockerignore
+
+node_modules
+dist
+build
+*.log
+.env
+.git
+.gitignore
+Dockerfile
+*.md
+*.tsbuildinfo
+coverage
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.vscode
+.idea
+*.swp
+*.swo
+*.bak
+*.tmp
