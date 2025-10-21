@@ -2,7 +2,7 @@ import mongoose, { Schema, Document, Model } from "mongoose";
 import { IUser } from "./user.model";
 
 export interface ICreditTransaction extends Document {
-    user: IUser["_id"];
+    userId: mongoose.Types.ObjectId;
     type: "credit" | "debit";
     amount: number;
     reason: string;
@@ -12,10 +12,10 @@ export interface ICreditTransaction extends Document {
 }
 
 const CreditTransactionSchema: Schema<ICreditTransaction> = new Schema({
-    user: {
+    userId: {
         type: Schema.Types.ObjectId,
-        ref: "User",
         required: true,
+        ref: "User",
     },
     type: {
         type: String,

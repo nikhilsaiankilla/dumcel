@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 interface JwtPayload {
     id: string;
     email: string;
-    userId:string
+    userId: string
     role?: string;
 }
 
@@ -23,24 +23,28 @@ export const authMiddleware = (req: AuthenticatedRequest, res: Response, next: N
             });
         }
 
-        const token = authHeader.split(" ")[1];
-        const secret = process.env.JWT_SECRET || "secret";
+        const token = authHeader.split(" ")[1]?.trim();
 
-        if (!secret) {
-            throw new Error("JWT_SECRET not defined in environment");
+        if (!token) {
+            return res.status(401).json({
+                success: false,
+                error: "Authorization token missing or malformed",
+            });
         }
 
-        // Verify token
+        const secret = process.env.JWT_SECRET || "secret";
+
         const decoded = jwt.verify(token, secret) as JwtPayload;
 
-        // Attach decoded payload to request
         req.user = decoded;
 
         next();
-    } catch (err) {
+    } catch (err: any) {
+        console.error("JWT verification failed:", err.message);
         return res.status(401).json({
             success: false,
             error: "Invalid or expired token",
         });
     }
 };
+

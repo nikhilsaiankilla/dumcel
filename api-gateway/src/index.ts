@@ -11,6 +11,7 @@ import cors from 'cors'
 import { githubRouter } from "./router/github.routes";
 import dotenv from "dotenv";
 import { analyticsRouter } from "./router/analytics.router";
+import { creditsRouter } from "./router/credits.router";
 
 dotenv.config();
 const app = express()
@@ -193,6 +194,8 @@ app.use('/api/github', githubRouter)
 app.use("/api/project", projectRouter);
 
 app.use('/api/analytics', analyticsRouter);
+
+app.use('/api/credits', creditsRouter);
 
 const PORT = process.env.PORT || 8000;
 

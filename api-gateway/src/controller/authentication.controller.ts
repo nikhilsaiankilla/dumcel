@@ -59,12 +59,8 @@ export const githubLoginController = async (req: Request, res: Response) => {
             (primaryEmail && (await UserModel.findOne({ email: primaryEmail }))) ||
             (await UserModel.findOne({ githubId: ghUser.id }));
 
-        let isNewUser = false;
-
         // If not found, create new user
         if (!user) {
-            isNewUser = true;
-
             user = await UserModel.create({
                 name: ghUser.name || ghUser.login,
                 email: primaryEmail || `${ghUser.login}@github.nouser`,

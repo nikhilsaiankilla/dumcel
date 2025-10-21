@@ -1,8 +1,7 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
-import { IUser } from "./user.model";
 
 export interface ICreditPurchase extends Document {
-    user: IUser["_id"];
+    userId: mongoose.Types.ObjectId;
     amount: number; // total INR amount paid
     credits: number; // credits granted for that payment
     orderId: string; // Razorpay order ID
@@ -14,10 +13,10 @@ export interface ICreditPurchase extends Document {
 }
 
 const CreditPurchaseSchema: Schema<ICreditPurchase> = new Schema({
-    user: {
+    userId: {
         type: Schema.Types.ObjectId,
-        ref: "User",
         required: true,
+        ref: "User",
     },
     amount: {
         type: Number,
