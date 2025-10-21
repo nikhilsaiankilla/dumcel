@@ -1,41 +1,28 @@
-import mongoose, { Schema, Document, Model } from "mongoose";
-import { fa } from "zod/v4/locales";
-
-// TypeScript interface for User document
-export interface IUser extends Document {
-    name: string;
-    email: string;
-    photo?: string;
-    githubId?: string;
-    password?: string;
-    isGitConnected: boolean;
-    credits: number;
-    createdAt: Date;
-}
+const mongoose = require("mongoose");
 
 // User schema
-const UserSchema: Schema<IUser> = new Schema({
+const UserSchema = new mongoose.Schema({
     name: {
         type: String,
         required: true,
-        trim: true
+        trim: true,
     },
     email: {
         type: String,
         required: true,
         unique: true,
         lowercase: true,
-        trim: true
+        trim: true,
     },
     photo: {
         type: String,
-        required: false
+        required: false,
     },
     githubId: {
         type: String,
         required: false,
         unique: true,
-        sparse: true
+        sparse: true,
     },
     password: {
         type: String,
@@ -51,9 +38,11 @@ const UserSchema: Schema<IUser> = new Schema({
     },
     createdAt: {
         type: Date,
-        default: Date.now
+        default: Date.now,
     },
 });
 
 // User model
-export const UserModel: Model<IUser> = mongoose.model<IUser>("User", UserSchema);
+const UserModel = mongoose.model("User", UserSchema);
+
+module.exports = UserModel;

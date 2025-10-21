@@ -19,7 +19,7 @@ async function getSecrets() {
                 VersionStage: "AWSCURRENT",
             })
         );
-        
+
         cachedSecrets = JSON.parse(response.SecretString);
         return cachedSecrets;
     } catch (error) {

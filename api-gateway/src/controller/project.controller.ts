@@ -5,6 +5,8 @@ import { ProjectModel } from "../model/project.model";
 import { generateSlug } from "random-word-slugs";
 import { DeploymentModel, DeploymentState } from "../model/deployment.model";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
+import { UserModel } from "../model/user.model";
+import { CreditTransactionModel } from "../model/creditTransaction.model";
 
 export const projectController = async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -23,7 +25,29 @@ export const projectController = async (req: AuthenticatedRequest, res: Response
 
         const { name, gitUrl, subDomain } = safeParseResult.data;
 
-        console.log(subDomain);
+        // Fetch user to check credits
+        const user = await UserModel.findById(userId);
+        if (!user) throw new Error("User not found");
+
+        if (user.credits < 10) {
+            return res.status(400).json({
+                status: "failed",
+                error: "Not enough credits. You need at least 10 credits to create a project.",
+            });
+        }
+
+        // Deduct 10 credits
+        user.credits -= 10;
+        await user.save();
+
+        // Log credit transaction
+        await CreditTransactionModel.create({
+            user: user._id,
+            type: "debit",
+            amount: 10,
+            reason: `${name} Project creation`,
+            balanceAfter: user.credits,
+        });
 
         const project = await ProjectModel.create({
             projectName: name,

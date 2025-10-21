@@ -10,6 +10,7 @@ import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { ProjectModel } from "../model/project.model";
 import { DeploymentModel } from "../model/deployment.model";
 import mongoose from "mongoose";
+import { CreditTransactionModel } from "../model/creditTransaction.model";
 
 export const githubLoginController = async (req: Request, res: Response) => {
     try {
@@ -58,14 +59,28 @@ export const githubLoginController = async (req: Request, res: Response) => {
             (primaryEmail && (await UserModel.findOne({ email: primaryEmail }))) ||
             (await UserModel.findOne({ githubId: ghUser.id }));
 
+        let isNewUser = false;
+
         // If not found, create new user
         if (!user) {
+            isNewUser = true;
+
             user = await UserModel.create({
                 name: ghUser.name || ghUser.login,
                 email: primaryEmail || `${ghUser.login}@github.nouser`,
                 githubId: ghUser.id,
                 photo: ghUser.avatar_url,
+                credits: 10, // Give 10 welcome credits
             });
+
+            await CreditTransactionModel.create({
+                user: user._id,
+                type: "credit",
+                amount: 10,
+                reason: "Welcome bonus for joining via GitHub",
+                balanceAfter: user.credits,
+            });
+
         } else {
             // Update missing GitHub fields if necessary
             if (!user.githubId) {
@@ -126,6 +141,16 @@ export const signupController = async (req: Request, res: Response) => {
             name,
             email,
             password: hashedPassword,
+            credits: 10,
+        });
+
+        // Log the credit transaction
+        await CreditTransactionModel.create({
+            user: newUser._id,
+            type: "credit",
+            amount: 10,
+            reason: "Welcome bonus for signing up",
+            balanceAfter: newUser.credits,
         });
 
         // Trigger Kafka queue (TODO: implement producer)
@@ -139,6 +164,7 @@ export const signupController = async (req: Request, res: Response) => {
             success: true,
             message: "User created successfully",
             userId: newUser._id,
+            credits: newUser.credits, // return welcome credits
         });
 
     } catch (error: unknown) {

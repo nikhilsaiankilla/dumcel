@@ -1,24 +1,20 @@
 FROM ubuntu:focal
 
 RUN apt-get update
-
 RUN apt-get install -y curl
-
 RUN curl -sL https://deb.nodesource.com/setup_22.x | bash -
-
 RUN apt-get upgrade -y
-
 RUN apt-get install -y nodejs
+
+RUN apt-get install git -y
 
 WORKDIR /home/app
 
 COPY package*.json .
-
 COPY . .
-COPY .env .env
 
 RUN npm install
 
-EXPOSE 8001
+EXPOSE 8002
 
-CMD ["node", "index.js"]
+CMD [ "node", 'server.js' ]
