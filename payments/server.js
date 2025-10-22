@@ -37,9 +37,7 @@ app.post('/payment/create-order', authMiddleware, async (req, res) => {
   try {
     const { amount, currency = "INR", credits } = req.body;
 
-    if (!amount || !credits) {
-      return res.status(400).json({ error: "Missing amount or credits" });
-    }
+    if (!amount || !credits) throw new Error("Missing amount or credits");
 
     const options = {
       amount, // amount in paise
@@ -47,23 +45,28 @@ app.post('/payment/create-order', authMiddleware, async (req, res) => {
       receipt: `receipt_${Date.now()}`,
     };
 
+    console.log(amount / 100);
+    console.log(credits);
+    
     const order = await razorpay.orders.create(options);
-
-    // TODO: Store the order in your DB
-    // e.g., CreditPurchaseModel.create({ userId, amount, credits, orderId: order.id, status: 'created' })
-
+    
     return res.status(200).json({
       success: true,
-      orderId: order.id,
-      amount: order.amount,
-      currency: order.currency,
-      credits,
-      receipt: order.receipt,
+      data: {
+        orderId: order.id,
+        amount: order.amount,
+        currency: order.currency,
+        credits,
+        receipt: order.receipt,
+      },
     });
 
   } catch (error) {
     console.error("Create order error:", error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : "Internal Server Error",
+    });
   }
 });
 
@@ -73,7 +76,7 @@ app.post("/payment/verify-order", authMiddleware, async (req, res) => {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature, credits, amount } = req.body;
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-      return res.status(400).json({ success: false, message: "Missing payment verification fields" });
+      throw new Error("Missing payment verification fields");
     }
 
     // Verify Razorpay signature
@@ -82,10 +85,10 @@ app.post("/payment/verify-order", authMiddleware, async (req, res) => {
     const generated_signature = hmac.digest("hex");
 
     if (razorpay_signature !== generated_signature) {
-      return res.status(400).json({ success: false, message: "Payment verification failed" });
+      throw new Error("Payment verification failed");
     }
 
-    // Update CreditPurchase record
+    // Update or create CreditPurchase record
     await CreditPurchaseModel.findOneAndUpdate(
       { orderId: razorpay_order_id },
       {
@@ -93,7 +96,7 @@ app.post("/payment/verify-order", authMiddleware, async (req, res) => {
         paymentId: razorpay_payment_id,
         status: "paid",
         credits,
-        amount
+        amount,
       },
       { new: true, upsert: true }
     );
@@ -112,19 +115,25 @@ app.post("/payment/verify-order", authMiddleware, async (req, res) => {
       amount,
       reason: "Credit purchase",
       relatedEntity: razorpay_payment_id,
-      balanceAfter: user.credits,
+      balanceAfter: user?.credits,
     });
 
-    return res.json({
+    return res.status(200).json({
       success: true,
       message: "Payment verified successfully",
-      credits,
-      amount,
-      balance: user.credits
+      data: {
+        credits,
+        amount,
+        balance: user?.credits,
+      },
     });
+
   } catch (error) {
     console.error("Verify order error:", error);
-    return res.status(500).json({ success: false, error: error.message });
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : "Internal Server Error",
+    });
   }
 });
 

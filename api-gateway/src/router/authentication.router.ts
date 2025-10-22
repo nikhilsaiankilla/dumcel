@@ -6,6 +6,7 @@ import {
     getUserController,
     githubLoginController,
     loginController,
+    logoutController,
     resetPassword,
     signupController,
     verifyOtp
@@ -42,6 +43,7 @@ router.post("/login", loginController);
 router.post("/forget-password", forgetPassword);
 router.post("/verify-otp", verifyOtp);
 router.post("/reset-password", resetPassword);
+router.post('/logout', logoutController)
 
 // Account management (protected routes)
 router.delete("/delete/account", authMiddleware, deleteAccountController);

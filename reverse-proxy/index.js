@@ -3,11 +3,11 @@ const httpProxy = require('http-proxy');
 const { connectDb } = require('./db');
 const ProjectModel = require('./models/project');
 const rateLimiter = require('express-rate-limit');
-const client = require('./utils/redisClient');
 const requestIp = require('request-ip');
 const geoip = require('geoip-lite');
 const UAParser = require('ua-parser-js');
 const { kafkaConnect, pushAnalyticsToKafka } = require('./utils/kafka');
+const { connectRedis } = require('./utils/redisClient');
 require('dotenv').config()
 
 const app = express();
@@ -36,6 +36,8 @@ app.use(async (req, res, next) => {
 
     const subDomain = hostName.split('.')[0];
     const cacheKey = `subDomain:${subDomain}`;
+
+    const client = global.redisClient
 
     try {
         // -------------------------
@@ -116,5 +118,6 @@ app.get('/health', (req, res) => {
 app.listen(PORT, "0.0.0.0", async () => {
     await connectDb();
     await kafkaConnect();
+    await connectRedis();
     console.log(`Reverse proxy running on http://localhost:${PORT}`)
 })

@@ -20,7 +20,7 @@ export const githubLoginController = async (req: Request, res: Response) => {
         }
 
         const { code } = req.query;
-        if (!code) return res.status(400).send("Missing authorization code");
+        if (!code) throw new Error("Missing authorization code");
 
         // Exchange code → access token
         const tokenRes = await fetch("https://github.com/login/oauth/access_token", {
@@ -38,7 +38,7 @@ export const githubLoginController = async (req: Request, res: Response) => {
 
         const tokenData = await tokenRes.json();
         const accessToken = tokenData.access_token;
-        if (!accessToken) return res.status(500).send("GitHub token exchange failed");
+        if (!accessToken) throw new Error("GitHub token exchange failed");
 
         // Get GitHub user profile + email
         const [userRes, emailRes] = await Promise.all([
@@ -66,7 +66,7 @@ export const githubLoginController = async (req: Request, res: Response) => {
                 email: primaryEmail || `${ghUser.login}@github.nouser`,
                 githubId: ghUser.id,
                 photo: ghUser.avatar_url,
-                credits: 10, // Give 10 welcome credits
+                credits: 10, // Welcome bonus
             });
 
             await CreditTransactionModel.create({
@@ -76,7 +76,6 @@ export const githubLoginController = async (req: Request, res: Response) => {
                 reason: "Welcome bonus for joining via GitHub",
                 balanceAfter: user.credits,
             });
-
         } else {
             // Update missing GitHub fields if necessary
             if (!user.githubId) {
@@ -92,27 +91,30 @@ export const githubLoginController = async (req: Request, res: Response) => {
             { expiresIn: "1h" }
         );
 
-        // // Set cookie (example)
+        // Set cookie
         res.cookie("token", token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
-            maxAge: 3600 * 1000, // 1 hour
+            maxAge: 3600 * 1000,
         });
 
         // Redirect to frontend with token
         const redirectUrl = `${process.env.FRONTEND_URL}/auth/github?token=${token}`;
-        return res.redirect(redirectUrl);
+        res.redirect(redirectUrl);
 
     } catch (err) {
         console.error("GitHub login error:", err);
-        res.status(500).send("GitHub login failed");
+        res.status(500).json({
+            success: false,
+            error: err instanceof Error ? err.message : "GitHub login failed",
+        });
     }
 };
 
 export const signupController = async (req: Request, res: Response) => {
     try {
         const schema = z.object({
-            name: z.string().min(3, "Name Must me 3 characters"),
+            name: z.string().min(3, "Name must be at least 3 characters"),
             email: z.string().email(),
             password: z
                 .string()
@@ -123,7 +125,7 @@ export const signupController = async (req: Request, res: Response) => {
         });
 
         // Validate input
-        const { email, password, name } = schema.parse(req.body);;
+        const { email, password, name } = schema.parse(req.body);
 
         // Check if user already exists
         const existingUser = await UserModel.findOne({ email });
@@ -149,29 +151,29 @@ export const signupController = async (req: Request, res: Response) => {
             balanceAfter: newUser.credits,
         });
 
-        // Trigger Kafka queue (TODO: implement producer)
+        // TODO: Trigger Kafka queue
         // await kafkaProducer.send({
         //   topic: "user.signup",
         //   messages: [{ value: JSON.stringify({ userId: newUser._id, email: newUser.email }) }],
         // });
 
-        // Return success response
-        return res.status(201).json({
+        // Success response
+        res.status(201).json({
             success: true,
             message: "User created successfully",
             userId: newUser._id,
-            credits: newUser.credits, // return welcome credits
+            credits: newUser.credits,
         });
 
     } catch (error: unknown) {
-        console.log(error);
-
-        return res.status(500).json({
+        console.error("Signup error:", error);
+        res.status(500).json({
             success: false,
             error: error instanceof Error ? error.message : "Internal Server Error",
         });
     }
-}
+};
+
 
 export const loginController = async (req: Request, res: Response) => {
     try {
@@ -195,28 +197,27 @@ export const loginController = async (req: Request, res: Response) => {
 
         // Verify password
         const hashed = existingUser.password;
-
         if (!hashed) throw new Error("Invalid credentials");
 
         const isVerified = await bcrypt.compare(password, hashed);
         if (!isVerified) throw new Error("Invalid credentials");
 
-        // Generate JWT token (example)
+        // Generate JWT token
         const token = jwt.sign(
             { userId: existingUser._id, email: existingUser.email },
             process.env.JWT_SECRET || "secret",
             { expiresIn: "1h" }
         );
 
-        // // Set cookie (example)
+        // Set cookie
         res.cookie("token", token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
             maxAge: 3600 * 1000, // 1 hour
         });
 
-        // Respond success
-        return res.status(200).json({
+        // Success response
+        res.status(200).json({
             success: true,
             message: "Login successful",
             userId: existingUser._id,
@@ -224,7 +225,8 @@ export const loginController = async (req: Request, res: Response) => {
         });
 
     } catch (error: unknown) {
-        return res.status(500).json({
+        console.error("Login error:", error);
+        res.status(500).json({
             success: false,
             error: error instanceof Error ? error.message : "Internal Server Error",
         });
@@ -244,49 +246,50 @@ export const forgetPassword = async (req: Request, res: Response) => {
         const existingUser = await UserModel.findOne({ email });
         if (!existingUser) throw new Error("User not found");
 
-        // generate the otp 
+        // Generate the OTP
         const otp = generateOTP();
-
         if (!otp) throw new Error("Failed to generate OTP");
 
-        //store the otp in otp table 
+        // Store OTP in DB
         const otpStored = await OtpModel.create({
-            otp: otp,
+            otp,
             email: existingUser.email,
             userId: existingUser._id,
-            expiresAt: new Date(Date.now() + 10 * 60 * 1000)
-        })
+            expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        });
+        if (!otpStored) throw new Error("Failed to store OTP");
 
-        if (!otpStored) throw new Error("Failed to store otp");
+        // TODO: send OTP via mail
 
-        //send otp via mail
-
-        // Set a cookie to indicate OTP is verified
+        // Set cookies for OTP verification
         res.cookie("otpSent", "true", {
-            httpOnly: true, // frontend cannot access JS
-            secure: process.env.NODE_ENV === "production", // HTTPS only in prod
-            maxAge: 10 * 60 * 1000, // 10 minutes
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            maxAge: 10 * 60 * 1000,
             sameSite: "lax",
         });
 
         res.cookie("otpEmail", email, {
-            httpOnly: true, // frontend cannot access JS
-            secure: process.env.NODE_ENV === "production", // HTTPS only in prod
-            maxAge: 10 * 60 * 1000, // 10 minutes
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            maxAge: 10 * 60 * 1000,
             sameSite: "lax",
-        })
+        });
 
-        return res.status(200).json({
+        // Success response
+        res.status(200).json({
             success: true,
-            message: "OTP Sent to email"
-        })
+            message: "OTP sent to email",
+        });
+
     } catch (error: unknown) {
-        return res.status(500).json({
+        console.error("Forget password error:", error);
+        res.status(500).json({
             success: false,
             error: error instanceof Error ? error.message : "Internal Server Error",
         });
     }
-}
+};
 
 export const verifyOtp = async (req: Request, res: Response) => {
     try {
@@ -309,37 +312,39 @@ export const verifyOtp = async (req: Request, res: Response) => {
         // Optional: delete OTP after verification
         await OtpModel.deleteOne({ _id: storedOtp._id });
 
-        // Set a cookie to indicate OTP is verified
+        // Set cookies to indicate verification and password reset window
         res.cookie("otpVerified", "true", {
-            httpOnly: true, // frontend cannot access JS
-            secure: process.env.NODE_ENV === "production", // HTTPS only in prod
-            maxAge: 10 * 60 * 1000, // 10 minutes
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            maxAge: 10 * 60 * 1000,
             sameSite: "lax",
         });
 
-        // Set a 10-minute password reset window cookie
         res.cookie("passwordResetAllowed", "true", {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
-            maxAge: 10 * 60 * 1000, // 10 minutes
+            maxAge: 10 * 60 * 1000,
             sameSite: "lax",
         });
 
         res.cookie("email", email, {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
-            maxAge: 10 * 60 * 1000, // 10 minutes
+            maxAge: 10 * 60 * 1000,
             sameSite: "lax",
         });
 
-        res.clearCookie('otpSent');
+        res.clearCookie("otpSent");
 
-        return res.status(200).json({
+        // Success response
+        res.status(200).json({
             success: true,
             message: "OTP verified successfully",
         });
+
     } catch (error: unknown) {
-        return res.status(500).json({
+        console.error("Verify OTP error:", error);
+        res.status(500).json({
             success: false,
             error: error instanceof Error ? error.message : "Internal Server Error",
         });
@@ -365,26 +370,29 @@ export const resetPassword = async (req: Request, res: Response) => {
             throw new Error("Password reset session expired. Please re-verify OTP.");
         }
 
-        const hashedPassword = await bcrypt.hash(newPassword, 10)
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
         // Update password
         await UserModel.updateOne(
             { email },
             { $set: { password: hashedPassword } }
         );
 
-        // Clear the reset window cookie
+        // Clear the reset window cookies
         res.clearCookie("passwordResetAllowed");
-        res.clearCookie("otpVerified")
+        res.clearCookie("otpVerified");
 
-        //Send mail confirmation
+        // TODO: send mail confirmation
 
-        return res.status(200).json({
+        // Success response
+        res.status(200).json({
             success: true,
             message: "Password reset successfully",
         });
-    } catch (error: unknown) {
 
-        return res.status(500).json({
+    } catch (error: unknown) {
+        console.error("Reset password error:", error);
+        res.status(500).json({
             success: false,
             error: error instanceof Error ? error.message : "Internal Server Error",
         });
@@ -407,37 +415,37 @@ export const changePassword = async (req: Request, res: Response) => {
                 .regex(/[A-Z]/, "Password must include at least one uppercase letter")
                 .regex(/[a-z]/, "Password must include at least one lowercase letter")
                 .regex(/[^A-Za-z0-9]/, "Password must include at least one special character")
-        })
+        });
 
         const { email, newPassword, oldPassword } = schema.parse(req.body);
 
         const existingUser = await UserModel.findOne({ email });
-
         if (!existingUser) throw new Error("User not found");
 
-        if (oldPassword === newPassword) throw new Error('Old and new password should be different')
+        if (oldPassword === newPassword) throw new Error("Old and new password should be different");
 
-        if (!existingUser.password) throw new Error('Account maybe connected with the github')
+        if (!existingUser.password) throw new Error("Account may be connected via GitHub");
 
         const isVerified = await bcrypt.compare(oldPassword, existingUser.password);
-
-        if (!isVerified) throw new Error('Invalid Old Password');
+        if (!isVerified) throw new Error("Invalid old password");
 
         const hashedPassword = await bcrypt.hash(newPassword, 10);
-
         await existingUser.updateOne({ $set: { password: hashedPassword } });
 
-        return res.status(200).json({
+        // Success response
+        res.status(200).json({
             success: true,
             message: "Password changed successfully",
         });
+
     } catch (error: unknown) {
-        return res.status(500).json({
+        console.error("Change password error:", error);
+        res.status(500).json({
             success: false,
             error: error instanceof Error ? error.message : "Internal Server Error",
         });
     }
-}
+};
 
 export const deleteAccountController = async (req: AuthenticatedRequest, res: Response) => {
     const session = await mongoose.startSession();
@@ -486,26 +494,53 @@ export const deleteAccountController = async (req: AuthenticatedRequest, res: Re
 export const getUserController = async (req: AuthenticatedRequest, res: Response) => {
     try {
         const userId = req.user?.userId;
-        if (!userId) {
-            return res.status(401).json({ success: false, message: "Unauthenticated user" });
-        }
+        if (!userId) throw new Error("Unauthenticated user");
 
         const user = await UserModel.findById(userId);
-        if (!user) {
-            return res.status(404).json({ success: false, message: "User not found" });
-        }
+        if (!user) throw new Error("User not found");
 
-        return res.status(200).json({
+        // Success response
+        res.status(200).json({
             success: true,
-            message: "User retrieved successfully",
             data: user,
         });
+
     } catch (error: unknown) {
         console.error("Error fetching user:", error);
-        return res.status(500).json({
+        res.status(500).json({
             success: false,
-            message: "Failed to fetch user",
-            error: error instanceof Error ? error.message : 'Internal server error',
+            error: error instanceof Error ? error.message : "Internal server error",
         });
     }
-}
+};
+
+export const logoutController = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        // Clear authentication-related cookies
+        const cookieOptions = {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax" as const,
+        };
+
+        res.clearCookie("token", cookieOptions);
+        res.clearCookie("otpVerified", cookieOptions);
+        res.clearCookie("passwordResetAllowed", cookieOptions);
+        res.clearCookie("otpEmail", cookieOptions);
+        res.clearCookie("otpSent", cookieOptions);
+
+        // Success response
+        res.status(200).json({
+            success: true,
+            message: "Logged out successfully",
+        });
+
+    } catch (error: unknown) {
+        console.error("Logout error:", error);
+        res.status(500).json({
+            success: false,
+            error: error instanceof Error ? error.message : "Internal server error",
+        });
+    }
+};
+

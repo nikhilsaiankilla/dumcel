@@ -11,21 +11,21 @@ export const authMiddleware = (req, res, next) => {
             });
         }
 
-        const token = authHeader.split(" ")[1];
-        const secret = process.env.JWT_SECRET || "secret";
-
-        if (!secret) {
-            throw new Error("JWT_SECRET not defined in environment");
+        const token = authHeader.split(" ")[1]?.trim();
+        if (!token) {
+            return res.status(401).json({
+                success: false,
+                error: "Authorization token missing or malformed",
+            });
         }
 
-        // Verify token
-        const decoded = jwt.verify(token, secret)
+        const secret = process.env.JWT_SECRET || "secret";
+        const decoded = jwt.verify(token, secret);
 
-        // Attach decoded payload to request
         req.user = decoded;
-
         next();
     } catch (err) {
+        console.error("JWT verification failed:", err instanceof Error ? err.message : err);
         return res.status(401).json({
             success: false,
             error: "Invalid or expired token",

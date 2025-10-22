@@ -12,15 +12,17 @@ export const githubRepoConnectController = async (req: AuthenticatedRequest, res
         }
 
         const { code, state } = req.query;
-        if (!code) return res.status(400).send("Missing code");
+        if (!code) throw new Error("Missing authorization code");
+        if (!state) throw new Error("Missing state");
 
-        // Decode JWT user from state (added during repo connect)
-        let userId: string | undefined;
+        // Decode JWT user from state
+        let userId: string;
         try {
             const decoded: any = jwt.verify(state as string, process.env.JWT_SECRET || "secret");
             userId = decoded.userId;
+            if (!userId) throw new Error("Invalid state payload");
         } catch {
-            return res.status(400).send("Invalid state");
+            throw new Error("Invalid state token");
         }
 
         // Exchange code → access token with repo scope
@@ -31,12 +33,13 @@ export const githubRepoConnectController = async (req: AuthenticatedRequest, res
                 client_id: secrets.github_client_id,
                 client_secret: secrets.github_client_secret,
                 code,
+                scope: "public_repo",
             }),
         });
 
         const tokenData = await tokenRes.json();
         const accessToken = tokenData.access_token;
-        if (!accessToken) return res.status(500).send("GitHub token exchange failed");
+        if (!accessToken) throw new Error("GitHub token exchange failed");
 
         // Save or update token
         await TokenModel.findOneAndUpdate(
@@ -45,32 +48,53 @@ export const githubRepoConnectController = async (req: AuthenticatedRequest, res
             { upsert: true, new: true }
         );
 
-        await UserModel.findByIdAndUpdate(userId, { isGitConnected: true }, { new: true })
+        await UserModel.findByIdAndUpdate(userId, { isGitConnected: true }, { new: true });
 
-        return res.redirect(`${process.env.FRONTEND_URL}/dashboard?github=connected`);
-    } catch (err) {
+        // Success response
+        res.status(200).json({
+            success: true,
+            message: "GitHub repository connected successfully",
+        });
+
+    } catch (err: unknown) {
         console.error("GitHub repo connect error:", err);
-        res.status(500).send("GitHub repo connection failed");
+        res.status(500).json({
+            success: false,
+            error: err instanceof Error ? err.message : "Internal Server Error",
+        });
     }
 };
 
 export const githubGetReposController = async (req: AuthenticatedRequest, res: Response) => {
     try {
         const userId = req.user?.userId;
-        if (!userId) return res.status(401).send("Unauthorized");
+        if (!userId) throw new Error("Unauthorized user");
 
         const tokenDoc = await TokenModel.findOne({ user: userId, provider: "github" });
-        if (!tokenDoc?.accessToken) return res.status(400).send("GitHub not connected");
+        if (!tokenDoc?.accessToken) throw new Error("GitHub not connected");
 
         // Fetch repositories
-        const reposRes = await fetch("https://api.github.com/user/repos", {
+        const reposRes = await fetch("https://api.github.com/user/repos?visibility=public", {
             headers: { Authorization: `Bearer ${tokenDoc.accessToken}` },
         });
 
+        if (!reposRes.ok) {
+            throw new Error(`GitHub API request failed with status ${reposRes.status}`);
+        }
+
         const repos = await reposRes.json();
-        return res.status(200).json(repos);
-    } catch (err) {
+
+        // Success response
+        res.status(200).json({
+            success: true,
+            data: repos,
+        });
+
+    } catch (err: unknown) {
         console.error("GitHub repo fetch error:", err);
-        res.status(500).send("Failed to fetch GitHub repos");
+        res.status(500).json({
+            success: false,
+            error: err instanceof Error ? err.message : "Internal Server Error",
+        });
     }
 };

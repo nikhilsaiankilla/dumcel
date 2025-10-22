@@ -55,6 +55,10 @@ async function connectRedis() {
         client.on("connect", () => console.log("Redis Connected"));
 
         await client.connect();
+
+        // Set global client for app-wide use
+        global.redisClient = client;
+        
         return client;
     } catch (err) {
         console.error("Redis Connection Failed:", err);

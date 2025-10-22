@@ -6,7 +6,7 @@ import { CreditPurchaseModel } from "../model/payment.model";
 export const getAllCreditUsage = async (req: AuthenticatedRequest, res: Response) => {
     try {
         const userId = req.user?.userId;
-        if (!userId) throw new Error("Unauthenticated User");
+        if (!userId) throw new Error("Unauthenticated user");
 
         // Pagination
         const page = parseInt(req.query.page as string) || 1;
@@ -21,8 +21,10 @@ export const getAllCreditUsage = async (req: AuthenticatedRequest, res: Response
                 .limit(limit),
             CreditTransactionModel.countDocuments({ userId }),
         ]);
-        return res.json({
-            status: "success",
+
+        // Success response
+        res.status(200).json({
+            success: true,
             data: {
                 transactions,
                 pagination: {
@@ -35,18 +37,20 @@ export const getAllCreditUsage = async (req: AuthenticatedRequest, res: Response
                 },
             },
         });
+
     } catch (error: unknown) {
-        return res.status(400).json({
-            status: "failed",
+        console.error("Get all credit usage error:", error);
+        res.status(500).json({
+            success: false,
             error: error instanceof Error ? error.message : "Internal Server Error",
         });
     }
-}
+};
 
 export const getAllPayments = async (req: AuthenticatedRequest, res: Response) => {
     try {
         const userId = req.user?.userId;
-        if (!userId) throw new Error("Unauthenticated User");
+        if (!userId) throw new Error("Unauthenticated user");
 
         // Pagination
         const page = parseInt(req.query.page as string) || 1;
@@ -62,8 +66,9 @@ export const getAllPayments = async (req: AuthenticatedRequest, res: Response) =
             CreditPurchaseModel.countDocuments({ userId }),
         ]);
 
-        return res.json({
-            status: "success",
+        // Success response
+        res.status(200).json({
+            success: true,
             data: {
                 payments,
                 pagination: {
@@ -76,10 +81,12 @@ export const getAllPayments = async (req: AuthenticatedRequest, res: Response) =
                 },
             },
         });
+
     } catch (error: unknown) {
-        return res.status(400).json({
-            status: "failed",
+        console.error("Get all payments error:", error);
+        res.status(500).json({
+            success: false,
             error: error instanceof Error ? error.message : "Internal Server Error",
         });
     }
-}
+};
