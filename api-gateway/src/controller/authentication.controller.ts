@@ -87,7 +87,7 @@ export const githubLoginController = async (req: Request, res: Response) => {
         // Issue JWT
         const token = jwt.sign(
             { userId: user._id, email: user.email },
-            process.env.JWT_SECRET || "secret",
+            secrets.jwt_secret || "secret",
             { expiresIn: "1h" }
         );
 
@@ -99,7 +99,7 @@ export const githubLoginController = async (req: Request, res: Response) => {
         });
 
         // Redirect to frontend with token
-        const redirectUrl = `${process.env.FRONTEND_URL}/auth/github?token=${token}`;
+        const redirectUrl = `${secrets.frontend_url}/auth/github?token=${token}`;
         res.redirect(redirectUrl);
 
     } catch (err) {
@@ -188,6 +188,10 @@ export const loginController = async (req: Request, res: Response) => {
                 .regex(/[^A-Za-z0-9]/, "Password must include at least one special character"),
         });
 
+        const secrets = global.secrets;
+
+        if (!secrets?.jwt_secret) throw new Error('Secrets Missing')
+
         // Validate input
         const { email, password } = schema.parse(req.body);
 
@@ -205,7 +209,7 @@ export const loginController = async (req: Request, res: Response) => {
         // Generate JWT token
         const token = jwt.sign(
             { userId: existingUser._id, email: existingUser.email },
-            process.env.JWT_SECRET || "secret",
+            secrets.jwt_secret || "secret",
             { expiresIn: "1h" }
         );
 

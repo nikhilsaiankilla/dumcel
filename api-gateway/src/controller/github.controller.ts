@@ -18,7 +18,7 @@ export const githubRepoConnectController = async (req: AuthenticatedRequest, res
         // Decode JWT user from state
         let userId: string;
         try {
-            const decoded: any = jwt.verify(state as string, process.env.JWT_SECRET || "secret");
+            const decoded: any = jwt.verify(state as string, secrets.jwt_secret || "secret");
             userId = decoded.userId;
             if (!userId) throw new Error("Invalid state payload");
         } catch {

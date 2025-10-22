@@ -11,9 +11,13 @@ router.get("/callback", async (req, res) => {
 
     if (!state) return githubLoginController(req, res);
 
+    const secrets = global.secrets;
+
+    if (!secrets?.jwt_secret) throw new Error('Secrets are missing')
+
     try {
         // Verify JWT instead of parsing as JSON
-        const decoded: any = jwt.verify(state as string, process.env.JWT_SECRET || "secret");
+        const decoded: any = jwt.verify(state as string, secrets.jwt_secret || "secret");
 
         // If decoded has userId → repo connect
         if (decoded?.userId) return githubRepoConnectController(req, res);

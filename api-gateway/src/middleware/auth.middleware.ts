@@ -26,7 +26,7 @@ export const authMiddleware = (req: AuthenticatedRequest, res: Response, next: N
         }
 
         const globalSecrets = global.secrets;
-        const secret = process.env.JWT_SECRET || globalSecrets?.jwt_secret || "secret";
+        const secret = globalSecrets?.jwt_secret || "secret";
 
         const decoded = jwt.verify(token, secret) as JwtPayload;
         req.user = decoded;

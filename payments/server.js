@@ -44,9 +44,6 @@ app.post('/payment/create-order', authMiddleware, async (req, res) => {
       currency,
       receipt: `receipt_${Date.now()}`,
     };
-
-    console.log(amount / 100);
-    console.log(credits);
     
     const order = await razorpay.orders.create(options);
     

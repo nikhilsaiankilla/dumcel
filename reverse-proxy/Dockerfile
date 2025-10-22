@@ -15,7 +15,6 @@ WORKDIR /home/app
 COPY package*.json .
 
 COPY . .
-COPY .env .env
 
 RUN npm install
 

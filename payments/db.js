@@ -32,6 +32,7 @@ async function connectDb() {
     }
 }
 
+
 // Graceful shutdown
 process.on("SIGINT", async () => {
     await mongoose.connection.close();
