@@ -6,9 +6,14 @@ import { UserModel } from "../model/user.model";
 
 export const githubRepoConnectController = async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const secrets = global.secrets;
-        if (!secrets?.github_client_id || !secrets?.github_client_secret) {
-            throw new Error("GitHub OAuth secrets missing");
+        if (
+            // Check if GITHUB_CLIENT_ID is missing from BOTH process.env AND global.secrets
+            !(process.env.GITHUB_CLIENT_ID || global.secrets?.github_client_id) ||
+
+            // Check if GITHUB_CLIENT_SECRET is missing from BOTH process.env AND global.secrets
+            !(process.env.GITHUB_CLIENT_SECRET || global.secrets?.github_client_secret)
+        ) {
+            throw new Error("Auth Secrets are missing from both environment variables and global.secrets.");
         }
 
         const { code, state } = req.query;
@@ -18,7 +23,7 @@ export const githubRepoConnectController = async (req: AuthenticatedRequest, res
         // Decode JWT user from state
         let userId: string;
         try {
-            const decoded: any = jwt.verify(state as string, secrets.jwt_secret || "secret");
+            const decoded: any = jwt.verify(state as string, process.env.JWT_SECRET || global?.secrets?.jwt_secret || "secret");
             userId = decoded.userId;
             if (!userId) throw new Error("Invalid state payload");
         } catch {
@@ -30,8 +35,8 @@ export const githubRepoConnectController = async (req: AuthenticatedRequest, res
             method: "POST",
             headers: { "Content-Type": "application/json", Accept: "application/json" },
             body: JSON.stringify({
-                client_id: secrets.github_client_id,
-                client_secret: secrets.github_client_secret,
+                client_id: process.env.GITHUB_CLIENT_ID || global?.secrets?.github_client_id,
+                client_secret: process.env.GITHUB_CLIENT_SECRET || global?.secrets?.github_client_secret,
                 code,
                 scope: "public_repo",
             }),

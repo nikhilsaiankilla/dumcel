@@ -8,6 +8,7 @@ const geoip = require('geoip-lite');
 const UAParser = require('ua-parser-js');
 const { kafkaConnect, pushAnalyticsToKafka } = require('./utils/kafka');
 const { connectRedis } = require('./utils/redisClient');
+const { getSecrets } = require('./utils/secrets');
 require('dotenv').config()
 
 const app = express();
@@ -116,6 +117,10 @@ app.get('/health', (req, res) => {
 })
 
 app.listen(PORT, "0.0.0.0", async () => {
+    // --- Production (fetch from secrets) ---
+    // const secrets = await getSecrets();
+    // global.secrets = secrets;
+
     await connectDb();
     await kafkaConnect();
     await connectRedis();

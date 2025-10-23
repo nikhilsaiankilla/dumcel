@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-const { getSecrets } = require("./utils/secrets");
 
 async function connectDb() {
     // Avoid reconnecting if already connected
@@ -9,23 +8,13 @@ async function connectDb() {
     }
 
     try {
-        let URI;
-
-        // Use environment variable in development
-        if (process.env.NODE_ENV === "development") {
-            URI = process.env.MONGO_DB_URI;
-            if (!URI) throw new Error("Missing MONGO_DB_URI in development environment");
-            console.log("Using local env MongoDB URI");
-        } else {
-            // In production, fetch from secret manager
-            const secrets = await getSecrets();
-            global.secrets = secrets;
-            URI = secrets.mongoDb_uri;
-            console.log("Using production secret MongoDB URI");
+        if (!(process.env.MONGO_DB_URI || global.secrets?.mongoDb_uri)) {
+            throw new Error("MongoDB URI is not defined in secrets");
         }
 
-        await mongoose.connect(URI);
+        await mongoose.connect(process.env.MONGO_DB_URI || global.secrets?.mongoDb_uri);
         console.log("Successfully connected to MongoDB!");
+
     } catch (err) {
         console.error("MongoDB connection error:", err);
         process.exit(1);

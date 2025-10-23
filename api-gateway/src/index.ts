@@ -21,7 +21,6 @@ app.use(cors({
     credentials: true
 }));
 
-// app.use(cors())
 app.use(express.json());
 app.use(cookieParser());
 
@@ -197,10 +196,14 @@ app.use('/api/analytics', analyticsRouter);
 
 app.use('/api/credits', creditsRouter);
 
+app.get('/health', (req: Request, res: Response) => {
+    res.status(200).send('OK');
+})
+
 const PORT = process.env.PORT || 8000;
 
 app.listen(PORT, async () => {
-    await initSecrets();
+    // await initSecrets();
     await connectDb()
     initConfigs();
 

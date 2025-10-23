@@ -1,6 +1,5 @@
 // redisClient.js
 const { createClient } = require("redis");
-const { getSecrets } = require("./secrets");
 
 let client;
 
@@ -14,40 +13,35 @@ async function connectRedis() {
     try {
         let config = {};
 
-        if (process.env.NODE_ENV === "development") {
-            // --- Development (use .env) ---
-            const { REDIS_HOST, REDIS_PORT, REDIS_USERNAME, REDIS_PASSWORD } = process.env;
+        const { REDIS_HOST, REDIS_PORT, REDIS_USERNAME, REDIS_PASSWORD } = process.env;
 
-            if (!REDIS_HOST || !REDIS_PORT) {
-                throw new Error("Missing Redis environment variables in development");
-            }
-
-            console.log("Using local Redis environment variables");
-
-            config = {
-                username: REDIS_USERNAME,
-                password: REDIS_PASSWORD,
-                socket: {
-                    host: REDIS_HOST,
-                    port: Number(REDIS_PORT),
-                },
-            };
-        } else {
-            // --- Production (fetch from secrets) ---
-            const secrets = await getSecrets();
-            global.secrets = secrets;
-
-            console.log("Using production Redis secrets");
-
-            config = {
-                username: secrets.redis_username,
-                password: secrets.redis_password,
-                socket: {
-                    host: secrets.redis_host,
-                    port: Number(secrets.redis_port),
-                },
-            };
+        if (
+            !(
+                // either all env vars present
+                (process.env.REDIS_HOST &&
+                    process.env.REDIS_PORT &&
+                    process.env.REDIS_USERNAME &&
+                    process.env.REDIS_PASSWORD) ||
+                // or all secrets present
+                (global?.secrets?.redis_host &&
+                    global?.secrets?.redis_port &&
+                    global?.secrets?.redis_username &&
+                    global?.secrets?.redis_password)
+            )
+        ) {
+            throw new Error("Missing Redis configuration in both environment variables and secrets");
         }
+
+        console.log("Using local Redis environment variables");
+
+        config = {
+            username: REDIS_USERNAME || global?.secrets?.redis_username,
+            password: REDIS_PASSWORD || global?.secrets?.redis_password,
+            socket: {
+                host: REDIS_HOST || global?.secrets?.redis_host,
+                port: Number(REDIS_PORT || global?.secrets?.redis_port),
+            },
+        };
 
         client = createClient(config);
 
@@ -58,7 +52,6 @@ async function connectRedis() {
 
         // Set global client for app-wide use
         global.redisClient = client;
-        
         return client;
     } catch (err) {
         console.error("Redis Connection Failed:", err);

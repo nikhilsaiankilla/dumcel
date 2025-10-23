@@ -19,11 +19,10 @@ export const authMiddleware = (req, res, next) => {
             });
         }
 
-        const secrets = global.secrets;
+        const secret = process.env.JWT_SECRET || global?.secrets?.jwt_secret || "secret";
 
-        if (!secrets.jwt_secret) throw new Error('Secrets are missing')
+        if (!secret) throw new Error('Secrets are missing')
 
-        const secret = secrets.jwt_secret || "secret";
         const decoded = jwt.verify(token, secret);
 
         req.user = decoded;

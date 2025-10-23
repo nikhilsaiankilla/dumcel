@@ -1,7 +1,5 @@
 import { ECSClient } from "@aws-sdk/client-ecs";
 import { Kafka } from "kafkajs";
-import path from "path";
-import fs from 'fs'
 import { createClient } from "@clickhouse/client";
 
 declare global {
@@ -11,39 +9,43 @@ declare global {
 }
 
 export const initConfigs = () => {
-    const secrets = global.secrets;
 
-    if (!secrets || !secrets.accessKeyId || !secrets.secretAccessKey || !secrets.kafka_ca_certificate) {
-        throw new Error("AWS secrets are not configured on global.secrets");
+    const isMissingAwsSecrets =
+        (!(process.env.ACCESS_KEY_ID || global.secrets?.accessKeyId) ||
+            !(process.env.SECRET_ACCESS_KEY || global.secrets?.secretAccessKey) ||
+            !(process.env.KAFKA_CA_CERTIFICATE || global.secrets?.kafka_ca_certificate));
+
+    if (isMissingAwsSecrets) {
+        throw new Error("AWS or Kafka secrets are missing from both process.env and global.secrets.");
     }
 
     const ecsClient = new ECSClient({
         region: "ap-south-1",
         credentials: {
-            accessKeyId: secrets.accessKeyId,
-            secretAccessKey: secrets.secretAccessKey
+            accessKeyId: process.env.ACCESS_KEY_ID || global?.secrets?.accessKeyId,
+            secretAccessKey: process.env.SECRET_ACCESS_KEY || global?.secrets?.secretAccessKey
         }
     });
 
     const kafka = new Kafka({
         clientId: `api-server`,
-        brokers: [secrets.kafka_broker],
+        brokers: [process.env.KAFKA_BROKER || global?.secrets?.kafka_broker],
         ssl: {
             rejectUnauthorized: false,
-            ca: [secrets.kafka_ca_certificate.trim()]
+            ca: [process.env.KAFKA_CA_CERTIFICATE || global?.secrets?.kafka_ca_certificate.trim()]
         },
         sasl: {
-            username: secrets.kafka_user_name,
-            password: secrets.kafka_password,
+            username: process.env.KAFKA_USER_NAME || global?.secrets?.kafka_user_name,
+            password: process.env.KAFKA_PASSWORD || global?.secrets?.kafka_password,
             mechanism: "plain"
         }
     });
 
     const clickhouseClient = createClient({
-        url: secrets.clickhouse_url,
-        database: secrets.database,
-        username: secrets.clickhouse_user_name,
-        password: secrets.clickhouse_password
+        url: process.env.CLICKHOUSE_URL || global?.secrets?.clickhouse_url,
+        database: process.env.DATABASE || global?.secrets?.database,
+        username: process.env.CLICKHOUSE_USER_NAME || global?.secrets?.clickhouse_user_name,
+        password: process.env.CLICKHOUSE_PASSWORD || global?.secrets?.clickhouse_password
     });
 
     global.ecsClient = ecsClient;

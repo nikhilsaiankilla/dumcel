@@ -20,14 +20,19 @@ router.post("/signup", signupController);
 
 // GitHub OAuth connect
 router.get("/github/login", (req, res) => {
-    const secrets = global.secrets;
 
-    if (!secrets?.github_client_id || !secrets?.github_client_secret) {
-        throw new Error("Auth Secrets are missing");
+    if (
+        // Check if GITHUB_CLIENT_ID is missing from BOTH process.env AND global.secrets
+        !(process.env.GITHUB_CLIENT_ID || global.secrets?.github_client_id) ||
+
+        // Check if GITHUB_CLIENT_SECRET is missing from BOTH process.env AND global.secrets
+        !(process.env.GITHUB_CLIENT_SECRET || global.secrets?.github_client_secret)
+    ) {
+        throw new Error("Auth Secrets are missing from both environment variables and global.secrets.");
     }
 
     const redirectUri = "http://localhost:3000/connecting";
-    const clientId = secrets.github_client_id;
+    const clientId = process.env.GITHUB_CLIENT_ID || global?.secrets?.github_client_id;
     const scope = "repo,user:email"; // ask for repo access
 
     const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}`;

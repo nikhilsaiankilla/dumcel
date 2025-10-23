@@ -25,12 +25,11 @@ export const authMiddleware = (req: AuthenticatedRequest, res: Response, next: N
             throw new Error("Authorization token missing or malformed");
         }
 
-        const globalSecrets = global.secrets;
-        const secret = globalSecrets?.jwt_secret || "secret";
-
+        const secret = process.env.JWT_SECRET || global?.secrets?.jwt_secret || "secret";
+        
         const decoded = jwt.verify(token, secret) as JwtPayload;
         req.user = decoded;
-
+        
         next();
     } catch (err: any) {
         console.error("JWT verification failed:", err.message);

@@ -14,9 +14,14 @@ import { CreditTransactionModel } from "../model/creditTransaction.model";
 
 export const githubLoginController = async (req: Request, res: Response) => {
     try {
-        const secrets = global.secrets;
-        if (!secrets?.github_client_id || !secrets?.github_client_secret) {
-            throw new Error("GitHub OAuth secrets missing");
+        if (
+            // Check if GITHUB_CLIENT_ID is missing from BOTH process.env AND global.secrets
+            !(process.env.GITHUB_CLIENT_ID || global.secrets?.github_client_id) ||
+
+            // Check if GITHUB_CLIENT_SECRET is missing from BOTH process.env AND global.secrets
+            !(process.env.GITHUB_CLIENT_SECRET || global.secrets?.github_client_secret)
+        ) {
+            throw new Error("Auth Secrets are missing from both environment variables and global.secrets.");
         }
 
         const { code } = req.query;
@@ -30,8 +35,8 @@ export const githubLoginController = async (req: Request, res: Response) => {
                 Accept: "application/json",
             },
             body: JSON.stringify({
-                client_id: secrets.github_client_id,
-                client_secret: secrets.github_client_secret,
+                client_id: process.env.GITHUB_CLIENT_ID || global?.secrets?.github_client_id,
+                client_secret: process.env.GITHUB_CLIENT_SECRET || global?.secrets?.github_client_secret,
                 code,
             }),
         });
@@ -43,7 +48,7 @@ export const githubLoginController = async (req: Request, res: Response) => {
         // Get GitHub user profile + email
         const [userRes, emailRes] = await Promise.all([
             fetch("https://api.github.com/user", {
-                headers: { Authorization: `Bearer ${accessToken}` },
+                headers: { Authorization: `Bearer ${accessToken}`},
             }),
             fetch("https://api.github.com/user/emails", {
                 headers: { Authorization: `Bearer ${accessToken}` },
@@ -70,7 +75,7 @@ export const githubLoginController = async (req: Request, res: Response) => {
             });
 
             await CreditTransactionModel.create({
-                user: user._id,
+                userId: user._id,
                 type: "credit",
                 amount: 10,
                 reason: "Welcome bonus for joining via GitHub",
@@ -83,11 +88,11 @@ export const githubLoginController = async (req: Request, res: Response) => {
                 await user.save();
             }
         }
-
+        
         // Issue JWT
         const token = jwt.sign(
             { userId: user._id, email: user.email },
-            secrets.jwt_secret || "secret",
+            process.env.JWT_SECRET || global?.secrets?.jwt_secret || "secret",
             { expiresIn: "1h" }
         );
 
@@ -99,7 +104,7 @@ export const githubLoginController = async (req: Request, res: Response) => {
         });
 
         // Redirect to frontend with token
-        const redirectUrl = `${secrets.frontend_url}/auth/github?token=${token}`;
+        const redirectUrl = `${process.env.FRONTEND_URL || global?.secrets?.frontend_url}/auth/github?token=${token}`;
         res.redirect(redirectUrl);
 
     } catch (err) {
@@ -188,9 +193,9 @@ export const loginController = async (req: Request, res: Response) => {
                 .regex(/[^A-Za-z0-9]/, "Password must include at least one special character"),
         });
 
-        const secrets = global.secrets;
-
-        if (!secrets?.jwt_secret) throw new Error('Secrets Missing')
+        if (!(process.env.JWT_SECRET || global?.secrets?.jwt_secret)) {
+            throw new Error('JWT Secret is missing from both process.env and global.secrets');
+        }
 
         // Validate input
         const { email, password } = schema.parse(req.body);
@@ -209,7 +214,7 @@ export const loginController = async (req: Request, res: Response) => {
         // Generate JWT token
         const token = jwt.sign(
             { userId: existingUser._id, email: existingUser.email },
-            secrets.jwt_secret || "secret",
+            process.env.JWT_SECRET || global?.secrets?.jwt_secret || "secret",
             { expiresIn: "1h" }
         );
 

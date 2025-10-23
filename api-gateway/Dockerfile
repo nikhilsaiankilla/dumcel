@@ -1,28 +1,20 @@
-FROM ubuntu:focal
-
-# Install dependencies
-RUN apt-get update && \
-    apt-get install -y curl build-essential && \
-    curl -sL https://deb.nodesource.com/setup_22.x | bash - && \
-    apt-get install -y nodejs
+# Use official Node.js image (based on Debian/Ubuntu)
+FROM node:22-bullseye
 
 # Set working directory
 WORKDIR /home/app
 
-# Copy package.json and package-lock.json first (for caching)
+# Copy package files first for better layer caching
 COPY package*.json ./
 
-# Install node modules
-RUN npm install
+# Install dependencies
+RUN npm install --production=false
 
-# Copy the rest of the code
+# Copy the rest of the source code
 COPY . .
 
-# Build TypeScript
+# Build the TypeScript project
 RUN npm run build
 
-# Expose the port
-EXPOSE 8000
-
-# Start the app
+# Start the application
 CMD ["npm", "run", "start"]

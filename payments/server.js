@@ -9,6 +9,7 @@ import CreditPurchaseModel from './model/payment.model.js';
 import UserModel from './model/user.model.js';
 import CreditTransactionModel from './model/creditTransaction.model.js';
 import { authMiddleware } from './middleware/auth.middleware.js';
+import { getSecrets } from './utils/secrets.js';
 
 dotenv.config();
 const app = express();
@@ -20,13 +21,12 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
-// Determine environment
-const isProd = process.env.NODE_ENV === "production";
-const secrets = global.secrets;
 
 // Choose Razorpay keys based on environment
-const razorpayKeyId = isProd ? secrets.razorpay_key_id : process.env.RAZORPAY_KEY_ID;
-const razorpayKeySecret = isProd ? secrets.razorpay_key_secret : process.env.RAZORPAY_KEY_SECRET;
+const razorpayKeyId = process.env.RAZORPAY_KEY_ID || global?.secrets?.razorpay_key_id;
+const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET || global?.secrets?.razorpay_key_secret;
+
+if (!razorpayKeyId || !razorpayKeySecret) throw new Error("Razorpay keys are not set");
 
 const razorpay = new Razorpay({
   key_id: razorpayKeyId,
@@ -44,9 +44,9 @@ app.post('/payment/create-order', authMiddleware, async (req, res) => {
       currency,
       receipt: `receipt_${Date.now()}`,
     };
-    
+
     const order = await razorpay.orders.create(options);
-    
+
     return res.status(200).json({
       success: true,
       data: {
@@ -137,6 +137,8 @@ app.post("/payment/verify-order", authMiddleware, async (req, res) => {
 const PORT = process.env.PORT || 8003;
 
 app.listen(PORT, async () => {
+  // const secrets = await getSecrets();
+  // global.secrets = secrets;
   await connectDb();
   console.log(`Payments Server running on port ${PORT}`);
 });

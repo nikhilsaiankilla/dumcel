@@ -73,7 +73,6 @@ export const projectController = async (req: AuthenticatedRequest, res: Response
 
 export const deployController = async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const secrets = global.secrets;
         const { projectId } = req.params;
         const { env } = req.body;
 
@@ -85,7 +84,20 @@ export const deployController = async (req: AuthenticatedRequest, res: Response)
         const userId = req.user?.userId;
         if (!userId) throw new Error("Unauthenticated user");
 
-        if (!secrets) throw new Error("Server secrets not initialized");
+        // --- Configuration Priority: process.env first, then global.secrets ---
+        // Mapping of secrets to constants, prioritizing environment variables
+        const CLUSTER_ARN = process.env.CLUSTER_ARN || global?.secrets?.CLUSTER;
+        const TASK_DEFINITION_ARN = process.env.TASK_DEFINITION_ARN || global?.secrets?.TASK;
+        const SUBNET_1 = process.env.SUBNET_1 || global?.secrets?.subnets_1;
+        const SUBNET_2 = process.env.SUBNET_2 || global?.secrets?.subnets_2;
+        const SUBNET_3 = process.env.SUBNET_3 || global?.secrets?.subnets_3;
+        const SECURITY_GROUP_ID = process.env.SECURITY_GROUP_ID || global?.secrets?.security_group;
+        const CONTAINER_NAME = process.env.BUILDER_CONTAINER_NAME || global?.secrets?.builder_image;
+
+        // Ensure critical configuration is present after checking both sources
+        if (!CLUSTER_ARN || !TASK_DEFINITION_ARN || !SUBNET_1 || !SECURITY_GROUP_ID || !CONTAINER_NAME) {
+            throw new Error("Missing critical AWS configuration (Cluster, Task Definition, Subnet, Security Group, or Container Name).");
+        }
 
         const deployment = await DeploymentModel.create({
             projectId,
@@ -116,22 +128,24 @@ export const deployController = async (req: AuthenticatedRequest, res: Response)
 
         const allEnvVars = [...baseEnv, ...envArray, ...authEnv];
 
+        const subnets = [SUBNET_1, SUBNET_2, SUBNET_3].filter((s): s is string => !!s);
+
         const command = new RunTaskCommand({
-            cluster: secrets.CLUSTER,
-            taskDefinition: secrets.TASK,
+            cluster: CLUSTER_ARN, // Use prioritized constant
+            taskDefinition: TASK_DEFINITION_ARN, // Use prioritized constant
             launchType: "FARGATE",
             count: 1,
             networkConfiguration: {
                 awsvpcConfiguration: {
                     assignPublicIp: "ENABLED",
-                    subnets: [secrets.subnets_1, secrets.subnets_2, secrets.subnets_3],
-                    securityGroups: [secrets.security_group],
+                    subnets: subnets, // Use filtered array
+                    securityGroups: [SECURITY_GROUP_ID], // Use prioritized constant
                 },
             },
             overrides: {
                 containerOverrides: [
                     {
-                        name: secrets.builder_image,
+                        name: CONTAINER_NAME, // Use prioritized constant
                         environment: allEnvVars,
                     },
                 ],
