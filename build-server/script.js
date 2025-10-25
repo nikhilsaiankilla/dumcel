@@ -6,6 +6,7 @@ const mime = require('mime-types');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { Kafka, Partitioners } = require('kafkajs');
 const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
+const cloudinary = require('cloudinary').v2;
 
 // ------------------- Constants -------------------
 const PROJECT_ID = process.env.PROJECT_ID;
@@ -52,6 +53,12 @@ async function main() {
             password: secrets.kafka_password,
             mechanism: 'plain',
         },
+    });
+
+    cloudinary.config({
+        cloud_name: secrets.cloudinary_cloud_name,
+        api_key: secrets.cloudinary_api_key,
+        api_secret: secrets.cloudinary_api_secret,
     });
 
     const producer = kafka.producer({ createPartitioner: Partitioners.LegacyPartitioner });
@@ -168,12 +175,87 @@ async function main() {
 
             await logLine('All files uploaded successfully!', 'SUCCESS', 'upload');
             await updateDeploymentStatus('success');
-            await producer.disconnect();
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             await logLine(`Upload failed: ${errorMessage}`, 'ERROR', 'upload');
 
             await updateDeploymentStatus('failed');
+        }
+
+        // ------------------- Upload Favicon to Cloudinary -------------------
+        await logLine('Searching for favicon to upload...', 'INFO', 'favicon');
+
+        try {
+            // Common favicon locations in React build output
+            const possiblePaths = [
+                // --- Generic Favicons ---
+                path.join(DIST_PATH, 'favicon.ico'),
+                path.join(DIST_PATH, 'favicon.png'),
+                path.join(DIST_PATH, 'assets', 'favicon.ico'),
+                path.join(DIST_PATH, 'assets', 'favicon.png'),
+
+                path.join(OUTPUT_PATH, 'public', 'favicon.ico'),
+                path.join(OUTPUT_PATH, 'public', 'favicon.png'),
+
+                // --- Framework-specific Icons ---
+                // Vite
+                path.join(DIST_PATH, 'vite.svg'),
+                path.join(OUTPUT_PATH, 'public', 'vite.svg'),
+
+                // React (CRA)
+                path.join(DIST_PATH, 'logo192.png'),
+                path.join(DIST_PATH, 'logo512.png'),
+                path.join(OUTPUT_PATH, 'public', 'logo192.png'),
+                path.join(OUTPUT_PATH, 'public', 'logo512.png'),
+
+                // Next.js
+                path.join(DIST_PATH, 'next.svg'),
+                path.join(DIST_PATH, 'vercel.svg'),
+                path.join(OUTPUT_PATH, 'public', 'next.svg'),
+                path.join(OUTPUT_PATH, 'public', 'vercel.svg'),
+
+                // Vue
+                path.join(DIST_PATH, 'vue.svg'),
+                path.join(OUTPUT_PATH, 'public', 'vue.svg'),
+
+                // Angular
+                path.join(DIST_PATH, 'angular.svg'),
+                path.join(OUTPUT_PATH, 'public', 'angular.svg'),
+            ];
+
+            const faviconPath = possiblePaths.find((p) => fs.existsSync(p));
+
+            if (!faviconPath) {
+                await logLine('No favicon found in build output.', 'WARN', 'favicon');
+            } else {
+                await logLine(`Favicon found: ${faviconPath}`, 'INFO', 'favicon');
+
+                const uploadResponse = await cloudinary.uploader.upload(faviconPath, {
+                    folder: 'dumcel_favicons',
+                    public_id: `favicon_${PROJECT_ID}_${DEPLOYMENT_ID}`,
+                    overwrite: true,
+                    resource_type: 'image',
+                });
+
+                await logLine(`Favicon uploaded to Cloudinary: ${uploadResponse.secure_url}`, 'SUCCESS', 'favicon', {
+                    url: uploadResponse.secure_url,
+                });
+
+                const faviconMeta = {
+                    SRC: uploadResponse.secure_url,
+                    PROJECT_ID,
+                }
+
+                await producer.send({
+                    topic: KAFKA_TOPIC_LOGS,
+                    messages: [{ key: 'favicon', value: JSON.stringify(faviconMeta) }],
+                });
+            }
+
+            await producer.disconnect();
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            await logLine(`Favicon upload failed: ${errorMessage}`, 'ERROR', 'favicon');
 
             await producer.disconnect();
         }
