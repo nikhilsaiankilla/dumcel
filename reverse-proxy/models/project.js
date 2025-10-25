@@ -36,6 +36,10 @@ const Project = new Schema({
         lowercase: true,
         trim: true
     },
+    favicon: {
+        type: String,
+        required: false,
+    },
 
     // Timestamp for when the document was created.
     createdAt: {
