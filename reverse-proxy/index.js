@@ -118,8 +118,8 @@ app.get('/health', (req, res) => {
 
 app.listen(PORT, "0.0.0.0", async () => {
     // --- Production (fetch from secrets) ---
-    // const secrets = await getSecrets();
-    // global.secrets = secrets;
+    const secrets = await getSecrets();
+    global.secrets = secrets;
 
     await connectDb();
     await kafkaConnect();

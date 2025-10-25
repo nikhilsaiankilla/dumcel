@@ -203,7 +203,7 @@ app.get('/health', (req: Request, res: Response) => {
 const PORT = process.env.PORT || 8000;
 
 app.listen(PORT, async () => {
-    // await initSecrets();
+    await initSecrets();
     await connectDb()
     initConfigs();
 

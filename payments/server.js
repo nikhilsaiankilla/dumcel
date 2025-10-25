@@ -21,7 +21,6 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
-
 // Choose Razorpay keys based on environment
 const razorpayKeyId = process.env.RAZORPAY_KEY_ID || global?.secrets?.razorpay_key_id;
 const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET || global?.secrets?.razorpay_key_secret;
@@ -31,6 +30,10 @@ if (!razorpayKeyId || !razorpayKeySecret) throw new Error("Razorpay keys are not
 const razorpay = new Razorpay({
   key_id: razorpayKeyId,
   key_secret: razorpayKeySecret
+});
+
+app.get('/', (req, res) => {
+  res.status(200).json({ status: 'Payments Service is healthy' });
 });
 
 app.post('/payment/create-order', authMiddleware, async (req, res) => {
@@ -134,11 +137,11 @@ app.post("/payment/verify-order", authMiddleware, async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 8003;
+const PORT = process.env.PORT || 8002;
 
 app.listen(PORT, async () => {
-  // const secrets = await getSecrets();
-  // global.secrets = secrets;
+  const secrets = await getSecrets();
+  global.secrets = secrets;
   await connectDb();
   console.log(`Payments Server running on port ${PORT}`);
 });

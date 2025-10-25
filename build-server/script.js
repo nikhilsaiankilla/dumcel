@@ -80,8 +80,8 @@ async function main() {
             topic: KAFKA_TOPIC_DEPLOYMENT,
             messages: [
                 {
-                    key: 'status',
-                    value: JSON.stringify({ DEPLOYMENT_ID, status, timestamp: new Date().toISOString() }),
+                    key: 'deployment-status',
+                    value: JSON.stringify({ DEPLOYMENT_ID, STATUS: status, timestamp: new Date().toISOString() }),
                 },
             ],
         });
@@ -147,27 +147,36 @@ async function main() {
 
         // ------------------- Upload to S3 -------------------
         await logLine('Uploading build files to S3...', 'INFO', 'upload');
-        const files = fs.readdirSync(DIST_PATH, { recursive: true });
+        try {
+            const files = fs.readdirSync(DIST_PATH, { recursive: true });
 
-        for (const file of files) {
-            const filePath = path.join(DIST_PATH, file);
-            if (fs.lstatSync(filePath).isDirectory()) continue;
+            for (const file of files) {
+                const filePath = path.join(DIST_PATH, file);
+                if (fs.lstatSync(filePath).isDirectory()) continue;
 
-            await logLine(`Uploading file: ${file}`, 'INFO', 'upload', { file });
-            await s3Client.send(
-                new PutObjectCommand({
-                    Bucket: S3_BUCKET,
-                    Key: `_output/${PROJECT_ID}/${file}`,
-                    Body: fs.createReadStream(filePath),
-                    ContentType: mime.lookup(filePath) || 'application/octet-stream',
-                })
-            );
-            await logLine(`Uploaded file: ${file}`, 'SUCCESS', 'upload', { file });
+                await logLine(`Uploading file: ${file}`, 'INFO', 'upload', { file });
+                await s3Client.send(
+                    new PutObjectCommand({
+                        Bucket: S3_BUCKET,
+                        Key: `_output/${PROJECT_ID}/${file}`,
+                        Body: fs.createReadStream(filePath),
+                        ContentType: mime.lookup(filePath) || 'application/octet-stream',
+                    })
+                );
+                await logLine(`Uploaded file: ${file}`, 'SUCCESS', 'upload', { file });
+            }
+
+            await logLine('All files uploaded successfully!', 'SUCCESS', 'upload');
+            await updateDeploymentStatus('success');
+            await producer.disconnect();
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            await logLine(`Upload failed: ${errorMessage}`, 'ERROR', 'upload');
+
+            await updateDeploymentStatus('failed');
+
+            await producer.disconnect();
         }
-
-        await logLine('All files uploaded successfully!', 'SUCCESS', 'upload');
-        await updateDeploymentStatus('success');
-        await producer.disconnect();
     });
 }
 

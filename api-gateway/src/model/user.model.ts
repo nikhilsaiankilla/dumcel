@@ -1,5 +1,4 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
-import { fa } from "zod/v4/locales";
 
 // TypeScript interface for User document
 export interface IUser extends Document {
