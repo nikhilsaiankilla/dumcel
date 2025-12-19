@@ -40,19 +40,21 @@ async function connectDb(mongoUri) {
 }
 
 async function updateProject(projectId, update) {
-    await DeploymentModel.findOneAndUpdate(
+    const res = await DeploymentModel.findOneAndUpdate(
         { where: { projectId: projectId } },
         { ...update },
         { new: true }
     );
+    console.log(`updated project status `, res)
 }
 
 async function updateProjectFavicon(projectId, update) {
-    await ProjectModel.findByIdAndUpdate(
+    const res = await ProjectModel.findByIdAndUpdate(
         { projectId },
         { ...update },
         { new: true }
     );
+    console.log(`updated project favicon `, res)
 }
 
 // ------------------- Main -------------------
@@ -60,7 +62,9 @@ async function main() {
     const secrets = await getSecrets();
     await connectDb(process.env.MONGO_DB_URI || secrets.mongoDb_uri);
 
-    await updateProject(PROJECT_ID, { state: DeploymentState.IN_PROGRESS });
+    await updateProject(PROJECT_ID, {
+        state: DeploymentState.QUEUED
+    })
 
     // ------------------- S3 Setup -------------------
     const s3Client = new S3Client({
@@ -95,39 +99,39 @@ async function main() {
     // await producer.connect();
 
     // ------------------- Helper Logging Functions -------------------
-    // async function logLine(message, type = 'INFO', step = 'general', meta = {}) {
-    //     const logObj = {
-    //         PROJECT_ID,
-    //         DEPLOYMENT_ID,
-    //         timestamp: new Date().toISOString(),
-    //         message,
-    //         type,
-    //         step,
-    //         meta,
-    //     };
-    //     await producer.send({
-    //         topic: KAFKA_TOPIC_LOGS,
-    //         messages: [{ key: 'log', value: JSON.stringify(logObj) }],
-    //     });
-    //     console.log(`[${logObj.timestamp}] [${step}] ${message}`);
-    // }
+    async function logLine(message, type = 'INFO', step = 'general', meta = {}) {
+        // const logObj = {
+        //     PROJECT_ID,
+        //     DEPLOYMENT_ID,
+        //     timestamp: new Date().toISOString(),
+        //     message,
+        //     type,
+        //     step,
+        //     meta,
+        // };
+        // await producer.send({
+        //     topic: KAFKA_TOPIC_LOGS,
+        //     messages: [{ key: 'log', value: JSON.stringify(logObj) }],
+        // });
+        console.log(`[${logObj.timestamp}] [${step}] ${message}`);
+    }
 
-    // async function updateDeploymentStatus(status) {
-    //     await producer.send({
-    //         topic: KAFKA_TOPIC_DEPLOYMENT,
-    //         messages: [
-    //             {
-    //                 key: 'deployment-status',
-    //                 value: JSON.stringify({ DEPLOYMENT_ID, STATUS: status, timestamp: new Date().toISOString() }),
-    //             },
-    //         ],
-    //     });
-    //     await logLine(`Deployment status: ${status}`, status === 'failed' ? 'ERROR' : 'SUCCESS', 'deploy');
-    // }
+    async function updateDeploymentStatus(status) {
+        // await producer.send({
+        //     topic: KAFKA_TOPIC_DEPLOYMENT,
+        //     messages: [
+        //         {
+        //             key: 'deployment-status',
+        //             value: JSON.stringify({ DEPLOYMENT_ID, STATUS: status, timestamp: new Date().toISOString() }),
+        //         },
+        //     ],
+        // });
+        await logLine(`Deployment status: ${status}`, status === 'failed' ? 'ERROR' : 'SUCCESS', 'deploy');
+    }
 
     // ------------------- Run Build Script -------------------
-    // await updateDeploymentStatus('in_progress');
-    // await logLine('Starting React project build...', 'INFO', 'deploy');
+    await updateDeploymentStatus('in_progress');
+    await logLine('Starting React project build...', 'INFO', 'deploy');
 
     // ------------------- Inject Environment Variables -------------------
     const envFilePath = path.join(OUTPUT_PATH, '.env');
@@ -149,19 +153,19 @@ async function main() {
         .map(([key, value]) => `${key}=${value}`);
 
     fs.writeFileSync(envFilePath, envEntries.join('\n'));
-    // await logLine(`.env file generated with ${envEntries.length} custom environment variables.`, 'INFO', 'build');
+    await logLine(`.env file generated with ${envEntries.length} custom environment variables.`, 'INFO', 'build');
 
     // ------------------- Run React Build -------------------
     const buildCommand = `cd ${OUTPUT_PATH} && npm install && npm run build`;
 
-    // await logLine(`Executing build command: ${buildCommand}`, 'INFO', 'build');
+    await logLine(`Executing build command: ${buildCommand}`, 'INFO', 'build');
 
     const buildProcess = exec(buildCommand);
 
     buildProcess.stdout.on('data', async (chunk) => {
         const lines = chunk.toString().split('\n').filter(Boolean);
         for (const line of lines) {
-            // await logLine(line, 'INFO', 'build-output');
+            await logLine(line, 'INFO', 'build-output');
         }
     });
 
@@ -169,24 +173,24 @@ async function main() {
         const lines = chunk.toString().split('\n').filter(Boolean);
         for (const line of lines) {
             await updateProject(PROJECT_ID, { state: DeploymentState.FAILED });
-            // await logLine(line, 'ERROR', 'build-output');
+            await logLine(line, 'ERROR', 'build-output');
         }
     });
 
     buildProcess.on('close', async (code) => {
         if (code !== 0) {
-            // await logLine(`Build failed with exit code ${code}`, 'ERROR', 'build');
-            // await updateDeploymentStatus('failed');
+            await logLine(`Build failed with exit code ${code}`, 'ERROR', 'build');
+            await updateDeploymentStatus('failed');
             await updateProject(PROJECT_ID, { state: DeploymentState.FAILED });
             // await producer.disconnect();
             await mongoose.connection.close();
             return;
         }
 
-        // await logLine('Build finished successfully.', 'SUCCESS', 'build');
+        await logLine('Build finished successfully.', 'SUCCESS', 'build');
 
         // ------------------- Upload to S3 -------------------
-        // await logLine('Uploading build files to S3...', 'INFO', 'upload');
+        await logLine('Uploading build files to S3...', 'INFO', 'upload');
         try {
             const files = fs.readdirSync(DIST_PATH, { recursive: true });
 
@@ -194,7 +198,7 @@ async function main() {
                 const filePath = path.join(DIST_PATH, file);
                 if (fs.lstatSync(filePath).isDirectory()) continue;
 
-                // await logLine(`Uploading file: ${file}`, 'INFO', 'upload', { file });
+                await logLine(`Uploading file: ${file}`, 'INFO', 'upload', { file });
                 await s3Client.send(
                     new PutObjectCommand({
                         Bucket: S3_BUCKET,
@@ -203,22 +207,22 @@ async function main() {
                         ContentType: mime.lookup(filePath) || 'application/octet-stream',
                     })
                 );
-                // await logLine(`Uploaded file: ${file}`, 'SUCCESS', 'upload', { file });
+                await logLine(`Uploaded file: ${file}`, 'SUCCESS', 'upload', { file });
             }
 
-            // await logLine('All files uploaded successfully!', 'SUCCESS', 'upload');
-            // await updateDeploymentStatus('success');
+            await logLine('All files uploaded successfully!', 'SUCCESS', 'upload');
+            await updateDeploymentStatus('success');
             await updateProject(PROJECT_ID, { state: DeploymentState.READY });
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            // await logLine(`Upload failed: ${errorMessage}`, 'ERROR', 'upload');
+            await logLine(`Upload failed: ${errorMessage}`, 'ERROR', 'upload');
 
-            // await updateDeploymentStatus('failed');
+            await updateDeploymentStatus('failed');
             await updateProject(PROJECT_ID, { state: DeploymentState.FAILED });
         }
 
         // ------------------- Upload Favicon to Cloudinary -------------------
-        // await logLine('Searching for favicon to upload...', 'INFO', 'favicon');
+        await logLine('Searching for favicon to upload...', 'INFO', 'favicon');
 
         try {
             // Common favicon locations in React build output
@@ -261,9 +265,9 @@ async function main() {
             const faviconPath = possiblePaths.find((p) => fs.existsSync(p));
 
             if (!faviconPath) {
-                // await logLine('No favicon found in build output.', 'WARN', 'favicon');
+                await logLine('No favicon found in build output.', 'WARN', 'favicon');
             } else {
-                // await logLine(`Favicon found: ${faviconPath}`, 'INFO', 'favicon');
+                await logLine(`Favicon found: ${faviconPath}`, 'INFO', 'favicon');
 
                 const uploadResponse = await cloudinary.uploader.upload(faviconPath, {
                     folder: 'dumcel_favicons',
@@ -272,9 +276,9 @@ async function main() {
                     resource_type: 'image',
                 });
 
-                // await logLine(`Favicon uploaded to Cloudinary: ${uploadResponse.secure_url}`, 'SUCCESS', 'favicon', {
-                //     url: uploadResponse.secure_url,
-                // });
+                await logLine(`Favicon uploaded to Cloudinary: ${uploadResponse.secure_url}`, 'SUCCESS', 'favicon', {
+                    url: uploadResponse.secure_url,
+                });
 
                 const faviconMeta = {
                     SRC: uploadResponse.secure_url,
@@ -292,7 +296,7 @@ async function main() {
             await mongoose.connection.close();
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            // await logLine(`Favicon upload failed: ${errorMessage}`, 'ERROR', 'favicon');
+            await logLine(`Favicon upload failed: ${errorMessage}`, 'ERROR', 'favicon');
 
             // await producer.disconnect();
             await mongoose.connection.close();
@@ -304,6 +308,9 @@ async function main() {
 main().catch(async (err) => {
     console.error('Deployment failed:', err);
     try {
+        await updateProject(PROJECT_ID, {
+            state: DeploymentState.FAILED
+        })
         // await producer?.disconnect();
         await mongoose.connection.close();
     } catch { }
