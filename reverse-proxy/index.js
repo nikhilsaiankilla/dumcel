@@ -87,7 +87,7 @@ app.use(async (req, res, next) => {
         };
 
         // Optional: push to Kafka
-        await pushAnalyticsToKafka('project-analytics', analyticsData);
+        // await pushAnalyticsToKafka('project-analytics', analyticsData);
 
         // attach projectId for proxy
         req.projectId = projectId;
@@ -122,7 +122,7 @@ app.listen(PORT, "0.0.0.0", async () => {
     global.secrets = secrets;
 
     await connectDb();
-    await kafkaConnect();
+    // await kafkaConnect();
     await connectRedis();
     console.log(`Reverse proxy running on http://localhost:${PORT}`)
 })
