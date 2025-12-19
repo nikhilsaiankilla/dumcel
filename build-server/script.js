@@ -6,8 +6,8 @@ const mime = require('mime-types');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { Kafka, Partitioners } = require('kafkajs');
 const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
-const ProjectModel = require('../reverse-proxy/models/project');
 const { DeploymentModel, DeploymentState } = require('./models/deploymentModel');
+const ProjectModel = require('./models/project');
 const { default: mongoose } = require('mongoose');
 const cloudinary = require('cloudinary').v2;
 
