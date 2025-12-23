@@ -1,23 +1,19 @@
-FROM ubuntu:focal
+FROM node:22-alpine AS deps
 
-RUN apt-get update
-RUN apt-get install -y curl
-RUN curl -sL https://deb.nodesource.com/setup_22.x | bash -
-RUN apt-get upgrade -y
-RUN apt-get install -y nodejs
+WORKDIR /app
 
-RUN apt-get install git -y
+COPY package*.json ./
 
-WORKDIR /home/app
+RUN npm install --omit=dev --no-audit --no-fund
 
-COPY main.sh main.sh
-COPY script.js script.js
-COPY package*.json .
+FROM node:22-alpine
+
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-RUN npm install 
+RUN sed -i 's/\r$//' main.sh \
+ && chmod +x main.sh script.js
 
-RUN chmod +x main.sh
-RUN chmod +x script.js
-
-ENTRYPOINT ["/home/app/main.sh"]
+ENTRYPOINT ["sh", "/app/main.sh"]
